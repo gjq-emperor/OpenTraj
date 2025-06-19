@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>The OpenTraj Platform</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --dp-color: #3b82f6;
+            --tte-color: #10b981;
+        }
+
+        /* Simplified navigation styles */
+        .nav-tabs {
+            border-bottom: 2px solid #dee2e6;
+            justify-content: center;
+            flex-wrap: nowrap;
+        }
+
+        .nav-link {
+            border: 1px solid transparent;
+            border-radius: 0;
+            padding: 0.8rem 1.5rem;
+            color: #495057;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-link:hover {
+            background-color: #f8f9fa;
+            border-color: #e9ecef;
+        }
+
+        .nav-link.active {
+            color: #0d6efd;
+            background-color: #fff;
+            border-color: #dee2e6 #dee2e6 #fff;
+            border-bottom: 3px solid #0d6efd;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-link.active i {
+            color: #0d6efd;
+        }
+
+        /* Icon styling */
+        .bi {
+            font-size: 1.1rem;
+            color: #6c757d;
+        }
+
+        .nav-link.active .bi {
+            color: inherit;
+        }
+
+
+        /* Content styles */
+        .task-container {
+            display: none;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .task-active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .map-container {
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+
+        .result-card {
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .tte-progress {
+            height: 8px;
+            border-radius: 4px;
+            background: #e2e8f0;
+        }
+
+        .tte-progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--tte-color) 0%, #34d399 100%);
+            transition: width 0.5s ease;
+        }
+
+        .tte-time-badge {
+            background: var(--tte-color);
+            padding: 8px 12px;
+            border-radius: 20px;
+            color: white;
+            font-weight: 500;
+        }
+
+        .tte-marker {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--tte-color) 0%, #34d399 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            border: 2px solid white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .tte-marker:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
+        .tte-marker-content {
+            text-align: center;
+            line-height: 1.2;
+            padding: 4px;
+        }
+
+        .tte-marker-icon {
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+
+        .tte-marker-text {
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .tte-arrival-time {
+            background: rgba(16, 185, 129, 0.1);
+            padding: 8px;
+            border-radius: 8px;
+            border-left: 3px solid var(--tte-color);
+        }
+
+        .tte-arrival-time-label {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .tte-arrival-time-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--tte-color);
+        }
+
+        .sts-legend {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .sts-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+        }
+
+        .sts-legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        #similarList .list-group-item {
+            transition: all 0.2s;
+        }
+
+        #similarList .list-group-item:hover {
+            transform: translateX(5px);
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+
+        .dp-dest-marker {
+            width: 36px;
+            height: 36px;
+            background: var(--dp-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            border: 2px solid white;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        }
+
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid px-4 py-3">
+        <header class="mb-4 text-center">
+            <h1 class="h3 fw-bold text-primary">
+                <i class="bi bi-geo-alt-fill"></i> The OpenTraj Platform
+            </h1>
+        </header>
+        <nav class="d-flex justify-content-center">
+            <ul class="nav nav-tabs justify-content-center">
+                <li class="nav-item">
+                    <a class="nav-link active" id="dpTab" onclick="switchTask('dp')">
+                        <i class="bi bi-pin-map"></i> Destination Prediction
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="tteTab" onclick="switchTask('tte')">
+                        <i class="bi bi-clock-history"></i> Travel Time Estimation
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="stsTab" onclick="switchTask('sts')">
+                        <i class="bi bi-search"></i> Similar Trajectory Search
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- DP Task Interface -->
+        <div id="dpTask" class="task-container task-active">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">
+                                <i class="bi bi-pin-map-fill"></i> Destination Prediction
+                            </h5>
+                            <div class="mb-3">
+                                <label class="form-label">Select Trajectory</label>
+                                <select class="form-select" id="dpTrajectory">
+                                    {% for traj in trajectories %}
+                                    <option value="{{ traj.id }}">Trajectory {{ loop.index }} - Start:{{ traj.start_time
+                                        }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button class="btn btn-primary w-100" onclick="loadDPTrajectory()">
+                                <i class="bi bi-eye"></i> Load Trajectory
+                            </button>
+                            <button class="btn btn-success w-100 mt-2" onclick="predictDP()">
+                                <i class="bi bi-lightning-charge"></i> Predict Destination
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="result-card">
+                        <h6><i class="bi bi-info-circle"></i> Prediction Results</h6>
+                        <div id="dpResult" class="mt-2">
+                            <p class="text-muted small">Results will appear here</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-8">
+                    <div class="map-container" id="dpMap"></div>
+                    <div class="alert alert-info mt-3" role="alert">
+                        <i class="bi bi-info-circle"></i> Predicted destination will be marked with a flag icon
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TTE Task Interface -->
+        <div id="tteTask" class="task-container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">
+                                <i class="bi bi-speedometer2"></i> Travel Time Prediction
+                            </h5>
+                            <div class="mb-3">
+                                <label class="form-label">Select Trajectory</label>
+                                <select class="form-select" id="tteTrajectory">
+                                    {% for traj in trajectories %}
+                                    <option value="{{ traj.id }}">Trajectory {{ loop.index }} - Start:{{ traj.start_time
+                                        }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button class="btn btn-primary w-100 mb-3" onclick="loadTTETrajectory()">
+                                <i class="bi bi-eye"></i> Load Trajectory
+                            </button>
+                            <button class="btn btn-success w-100" onclick="predictTTE()" id="ttePredictBtn">
+                                <i class="bi bi-lightning-charge"></i> Estimate Travel Time
+                            </button>
+                        </div>
+                    </div>
+                    <div class="result-card">
+                        <h6><i class="bi bi-clock"></i> Prediction Results</h6>
+                        <div id="tteResult" class="mt-3">
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <div class="tte-time-badge">
+                                    <i class="bi bi-clock-history me-1"></i>
+                                    <span id="tteTime">--:--:--</span>
+                                </div>
+                                <div class="text-muted small text-center">
+                                    <div>Points</div>
+                                    <div class="h5 mb-0" id="ttePoints">0</div>
+                                </div>
+                            </div>
+                            <div class="tte-progress">
+                                <div class="tte-progress-bar" id="tteProgress" style="width: 0%"></div>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-flag-fill text-success"></i>
+                                <div class="small">
+                                    <div>Estimated Arrival</div>
+                                    <div class="fw-bold" id="tteArrivalTime">--:--:--</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-8">
+                    <div class="map-container" id="tteMap"></div>
+                    <div class="alert alert-success mt-3" role="alert">
+                        <i class="bi bi-lightbulb"></i> Trajectory loaded. Click markers for details
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STS Task Interface -->
+        <div id="stsTask" class="task-container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">
+                                <i class="bi bi-search-heart"></i> Similar Trajectory Search
+                            </h5>
+                            <div class="mb-3">
+                                <label class="form-label">Select Query Trajectory</label>
+                                <select class="form-select" id="stsTrajectory">
+                                    {% for traj in trajectories %}
+                                    <option value="{{ traj.id }}">Query Trajectory {{ loop.index }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button class="btn btn-primary w-100" onclick="loadSTSTrajectory()">
+                                <i class="bi bi-eye"></i> Load Trajectory
+                            </button>
+                            <button class="btn btn-success w-100 mt-2" onclick="searchSimilar()">
+                                <i class="bi bi-search"></i> Search Similar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="result-card">
+                        <h6><i class="bi bi-search"></i> Search Results</h6>
+                        <div id="stsResult" class="mt-2">
+                            <div class="list-group" id="similarList"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="map-container" id="stsMap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        window._AMapSecurityConfig = { securityJsCode: "9498ba02712ceab1904b2359a73e2e0c" };
+    </script>
+    <script src="https://webapi.amap.com/loader.js"></script>
+
+    <script>
+        // Initialize trajectory data
+        window.trajectoriesData = {
+            {% for traj in trajectories %}
+        "{{ traj.id }}": {
+            dp: {{ traj.preview | tojson }},
+            tte: {{ traj.preview_full | tojson }}
+        },
+        {% endfor %}
+        };
+
+        // Map instances and state management
+        let dpMap, tteMap, stsMap;
+        let currentDPTrajectory = null;
+        let stsSearchResults = null;
+        let dpMarkers = [];
+
+        const STS_COLORS = ['#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+        // Initialize map
+        async function initMap(container, style = 'amap://styles/normal') {
+            return new Promise(resolve => {
+                AMapLoader.load({
+                    key: "aa320fc3b329e70821e550a92ba6cef3",
+                    version: "2.0",
+                    plugins: ['AMap.Polyline', 'AMap.Marker', 'AMap.InfoWindow'],
+                }).then(AMap => {
+                    const map = new AMap.Map(container, {
+                        zoom: 12,
+                        center: [104.065, 30.662],
+                        mapStyle: style,
+                        showLabel: false
+                    });
+                    resolve(map);
+                });
+            });
+        }
+
+        // Task switching
+        async function switchTask(task) {
+            // Remove active state from all nav items
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            // Set current nav item as active
+            const activeLink = document.querySelector(`[onclick="switchTask('${task}')"]`);
+            activeLink.classList.add('active');
+
+            // Switch task panels
+            document.querySelectorAll('.task-container').forEach(el => el.classList.remove('task-active'));
+            document.getElementById(task + 'Task').classList.add('task-active');
+
+            // Initialize maps if not already done
+            if (task === 'dp' && !dpMap) {
+                dpMap = await initMap('dpMap');
+            }
+            if (task === 'tte' && !tteMap) {
+                tteMap = await initMap('tteMap');
+            }
+            if (task === 'sts' && !stsMap) {
+                stsMap = await initMap('stsMap', 'amap://styles/darkblue');
+            }
+        }
+
+        // Load DP trajectory
+        function loadDPTrajectory() {
+            const trajId = document.getElementById('dpTrajectory').value;
+            const previewData = window.trajectoriesData[trajId].dp;
+
+            try {
+                dpMap.clearMap();
+                dpMarkers = [];
+
+                // Draw preview trajectory
+                const path = previewData.map(p => [p[0], p[1]]);
+                const polyline = new AMap.Polyline({
+                    path: path,
+                    strokeColor: '#3b82f6',
+                    strokeWeight: 6,
+                    showDir: true
+                });
+                dpMap.add(polyline);
+
+                // Add start and end markers
+                const startMarker = new AMap.Marker({
+                    position: path[0],
+                    icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+                    offset: new AMap.Pixel(-12, -12)
+                });
+                const endMarker = new AMap.Marker({
+                    position: path[path.length - 1],
+                    icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png',
+                    offset: new AMap.Pixel(-12, -12)
+                });
+
+                dpMap.add([startMarker, endMarker]);
+                dpMarkers.push(polyline, startMarker, endMarker);
+                dpMap.setFitView(dpMarkers);
+
+            } catch (error) {
+                console.error('Failed to load trajectory:', error);
+            }
+        }
+
+        // DP prediction
+        async function predictDP() {
+            const trajId = document.getElementById('dpTrajectory').value;
+            try {
+                const response = await fetch(`/api/predict/${trajId}`, { method: 'POST' });
+                const data = await response.json();
+
+                // Coordinate conversion
+                AMap.convertFrom([[data.destination.center.lng, data.destination.center.lat]], 'gps', (status, result) => {
+                    if (status === 'complete' && result.info === 'ok') {
+                        const destPos = result.locations[0];
+
+                        // Clear old prediction markers
+                        dpMap.getAllOverlays().forEach(layer => {
+                            if (layer.CLASS_NAME === 'AMap.Marker' && layer.getExtData().type === 'prediction') {
+                                dpMap.remove(layer);
+                            }
+                        });
+
+                        const markerContent = document.createElement('div');
+                        markerContent.className = 'dp-dest-marker';
+                        markerContent.innerHTML = 'D';
+
+                        const destMarker = new AMap.Marker({
+                            position: destPos,
+                            content: markerContent,
+                            offset: new AMap.Pixel(-18, -18),
+                            extData: { type: 'prediction' }
+                        });
+                        dpMap.add(destMarker)
+
+
+                        // Info window
+                        const infoWindow = new AMap.InfoWindow({
+                            content: `<div class="p-2">
+                                <h6>Predicted Destination</h6>
+                                <p>Road ID: ${data.prediction}</p>
+                                <p>Coordinates: ${destPos.lng.toFixed(6)}, ${destPos.lat.toFixed(6)}</p>
+                            </div>`,
+                            offset: new AMap.Pixel(0, -40)
+                        });
+
+                        destMarker.on('click', () => infoWindow.open(dpMap, destPos));
+
+                        // Update results panel
+                        document.getElementById('dpResult').innerHTML = `
+                            <p class="mb-1"><strong>Predicted Road:</strong> ${data.prediction}</p>
+                            <p class="mb-1"><strong>Longitude:</strong> ${destPos.lng.toFixed(6)}</p>
+                            <p class="mb-1"><strong>Latitude:</strong> ${destPos.lat.toFixed(6)}</p>
+                        `;
+
+                        // Adjust view
+                        dpMap.setFitView([...dpMarkers, destMarker], { padding: [100, 100, 100, 100] });
+                    }
+                });
+
+            } catch (error) {
+                console.error('Prediction failed:', error);
+            }
+        }
+
+        // Time formatting
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Load TTE trajectory
+        async function loadTTETrajectory() {
+            if (!tteMap) {
+                tteMap = await initMap('tteMap');
+            }
+            const trajId = document.getElementById('tteTrajectory').value;
+            const previewData = window.trajectoriesData[trajId].tte;
+
+            try {
+                tteMap.clearMap();
+
+                // Draw full trajectory
+                const path = previewData.map(p => [p[0], p[1]]);
+                const polyline = new AMap.Polyline({
+                    path: path,
+                    strokeColor: '#10b981',
+                    strokeWeight: 6,
+                    showDir: true
+                });
+                tteMap.add(polyline);
+
+                // Add start and end markers
+                const startMarker = new AMap.Marker({
+                    position: path[0],
+                    icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+                    offset: new AMap.Pixel(-12, -12)
+                });
+                const endMarker = new AMap.Marker({
+                    position: path[path.length - 1],
+                    icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png',
+                    offset: new AMap.Pixel(-12, -12)
+                });
+
+                tteMap.add([startMarker, endMarker]);
+                tteMap.setFitView([polyline, startMarker, endMarker]);
+
+            } catch (error) {
+                console.error('Failed to load trajectory:', error);
+            }
+        }
+
+        // TTE prediction
+        async function predictTTE() {
+            const button = document.getElementById('ttePredictBtn');
+            const originalHTML = button.innerHTML;
+
+            try {
+                button.disabled = true;
+                button.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Predicting...';
+
+                const trajId = document.getElementById('tteTrajectory').value;
+                const response = await fetch(`/api/predict_tte/${trajId}`, { method: 'POST' });
+                const data = await response.json();
+
+                const formattedTime = formatDuration(data.prediction);
+                const timeParts = formattedTime.split(':');
+
+                // Calculate arrival time
+                const startTimeStr = document.querySelector(`#tteTrajectory option[value="${trajId}"]`).textContent.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/)[0];
+                const startTime = new Date(startTimeStr);
+                const arrivalTime = new Date(startTime.getTime() + data.prediction * 1000);
+
+                // Format time display
+                const formatTimeOptions = {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                };
+                const arrivalTimeStr = arrivalTime.toLocaleTimeString('en-US', formatTimeOptions);
+
+                // Update results panel
+                document.getElementById('tteArrivalTime').textContent = arrivalTimeStr;
+                document.getElementById('tteTime').textContent = formattedTime;
+                document.getElementById('ttePoints').textContent = data.coordinates.length;
+                document.getElementById('tteProgress').style.width =
+                    `${Math.min(data.prediction / 3600 * 100, 100)}%`;
+
+                // Clear old markers
+                tteMap.getAllOverlays().forEach(layer => {
+                    if (layer.CLASS_NAME === 'AMap.Marker' && layer.getExtData()?.type === 'prediction') {
+                        tteMap.remove(layer);
+                    }
+                });
+
+                // Add prediction marker
+                const lastPos = data.coordinates[data.coordinates.length - 1];
+                const markerContent = document.createElement('div');
+                markerContent.className = 'tte-marker';
+                markerContent.innerHTML = `
+                    <div class="tte-marker-content">
+                        <i class="bi bi-clock-fill tte-marker-icon"></i>
+                        <div class="tte-marker-text">${timeParts[1]}min</div>
+                    </div>
+                `;
+
+                const marker = new AMap.Marker({
+                    position: lastPos,
+                    content: markerContent,
+                    offset: new AMap.Pixel(-24, -24),
+                    extData: { type: 'prediction' }
+                });
+                tteMap.add(marker);
+
+                // Info window
+                const infoWindow = new AMap.InfoWindow({
+                    content: `
+                        <div class="p-3 bg-white rounded shadow-sm">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-clock-history fs-5 text-success"></i>
+                                <h6 class="mb-0">Travel Time Prediction</h6>
+                            </div>
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <td><i class="bi bi-play-circle"></i> Departure Time</td>
+                                        <td class="text-end">${startTime.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="bi bi-hourglass-split"></i> Travel Duration</td>
+                                        <td class="text-end">${formattedTime}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="bi bi-flag-fill"></i> Arrival Time</td>
+                                        <td class="text-end">${arrivalTime.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="bi bi-signpost"></i> Points</td>
+                                        <td class="text-end">${data.coordinates.length}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="bi bi-pin-map"></i> End Coordinates</td>
+                                        <td class="text-end">${lastPos[0].toFixed(6)}, ${lastPos[1].toFixed(6)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    `,
+                    offset: new AMap.Pixel(0, -45)
+                });
+
+                marker.on('click', () => infoWindow.open(tteMap, lastPos));
+                tteMap.setFitView([marker], { padding: [80, 80, 80, 80] });
+
+            } catch (error) {
+                console.error('Prediction failed:', error);
+                document.getElementById('tteResult').innerHTML = `
+                    <div class="alert alert-danger py-2">
+                        <i class="bi bi-exclamation-triangle"></i> Prediction failed: ${error.message}
+                    </div>
+                `;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalHTML;
+            }
+        }
+
+        // Initialize DP map
+        (async function init() {
+            dpMap = await initMap('dpMap');
+        })();
+
+        // Load STS query trajectory
+        async function loadSTSTrajectory() {
+            const trajId = document.getElementById('stsTrajectory').value;
+            const previewData = window.trajectoriesData[trajId].dp;
+
+            if (!stsMap) stsMap = await initMap('stsMap');
+            stsMap.clearMap();
+
+            // Draw query trajectory
+            const path = previewData.map(p => [p[0], p[1]]);
+            new AMap.Polyline({
+                map: stsMap,
+                path: path,
+                strokeColor: '#3b82f6',
+                strokeWeight: 4,
+                showDir: true
+            });
+
+            // Add markers
+            new AMap.Marker({
+                position: path[0],
+                icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+                map: stsMap
+            });
+            new AMap.Marker({
+                position: path[path.length - 1],
+                icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png',
+                map: stsMap
+            });
+
+            stsMap.setFitView();
+        }
+
+        // Search similar trajectories
+        async function searchSimilar() {
+            const queryId = document.getElementById('stsTrajectory').value;
+            try {
+                const response = await fetch(`/api/search/${queryId}`, { method: 'POST' });
+                stsSearchResults = await response.json();
+
+                // Clear map
+                stsMap.clearMap();
+
+                // Draw only query trajectory (blue solid line)
+                drawTrajectory(
+                    stsSearchResults.query.coordinates,
+                    '#3b82f6',
+                    'Query Trajectory',
+                    true,
+                    null
+                );
+
+                // Update results list - removed target trajectory entry
+                const listHtml = `
+            <div class="list-group-item bg-primary bg-opacity-10">
+                <div class="d-flex justify-content-between">
+                    <div><i class="bi bi-search"></i> Query Trajectory</div>
+                    <span class="text-primary">ID: ${stsSearchResults.query.id}</span>
+                </div>
+            </div>
+            ${stsSearchResults.top_matches.map((traj, idx) => `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge" style="background:${STS_COLORS[idx]};color:white">
+                                TOP ${idx + 1}
+                            </span>
+                            <span class="ms-2">Trajectory ID: ${traj.id}</span>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary" 
+                                    onclick="showSimilarTrajectory(${idx})">
+                                <i class="bi bi-zoom-in"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}`;
+
+                document.getElementById('similarList').innerHTML = listHtml;
+
+            } catch (error) {
+                console.error('Search failed:', error);
+                document.getElementById('similarList').innerHTML = `
+            <div class="alert alert-danger">Search failed: ${error.message}</div>`;
+            }
+        }
+
+        // Show similar trajectory
+        function showSimilarTrajectory(index) {
+            // Clear previous similar trajectories
+            stsMap.getAllOverlays().forEach(layer => {
+                if (layer.getExtData()?.type === 'similar') {
+                    stsMap.remove(layer);
+                }
+            });
+
+            // Draw new trajectory
+            const traj = stsSearchResults.top_matches[index];
+            drawTrajectory(
+                traj.coordinates,
+                STS_COLORS[index],
+                `Similar Trajectory ${index + 1}`,
+                false,
+                traj.similarity
+            );
+
+            // Auto focus
+            focusTrajectory(traj.coordinates);
+        }
+
+        // Modified drawTrajectory function (removed isTarget parameter)
+        function drawTrajectory(coords, color, title, isQuery = false, similarity = null) {
+            const path = coords.map(p => [p[0], p[1]]);
+
+            const style = {
+                strokeColor: color,
+                strokeWeight: isQuery ? 6 : 4,  // Removed target-specific weighting
+                strokeOpacity: 0.8,             // Unified opacity
+                showDir: true
+            };
+
+            const polyline = new AMap.Polyline({
+                path: path,
+                ...style,
+                strokeStyle: 'solid',          // Always use solid line
+                lineJoin: 'round',
+                map: stsMap,
+                extData: {
+                    type: isQuery ? 'query' : 'similar'
+                }
+            });
+
+            // Info window content - removed target-specific content
+            const infoWindow = new AMap.InfoWindow({
+                content: `<div class="p-2 bg-white shadow-sm rounded">
+            <div style="border-left:3px solid ${color};padding-left:8px">
+                <h6 class="mb-1">${title}</h6>
+                <div class="text-muted small">
+                    ${isQuery ? 'Query Trajectory' : 'Similar Trajectory'}
+                </div>
+                <div class="mt-1 small">
+                    Points: ${coords.length}<br>
+                    ${similarity ? `Similarity: ${similarity.toFixed(2)}` : ''}
+                </div>
+            </div>
+        </div>`
+            });
+
+            polyline.on('mouseover', e => {
+                polyline.setOptions({ strokeWeight: style.strokeWeight + 2 });
+                infoWindow.open(stsMap, e.lnglat);
+            });
+            polyline.on('mouseout', () => {
+                polyline.setOptions({ strokeWeight: style.strokeWeight });
+                infoWindow.close();
+            });
+
+            // Auto focus for similar trajectories remains
+            if (!isQuery) {
+                stsMap.setFitView([polyline], {
+                    padding: [100, 100, 100, 100],
+                    zoom: stsMap.getZoom() + 1
+                });
+            }
+        }
+
+        // Focus on trajectory
+        function focusTrajectory(coordinates) {
+            const path = coordinates.map(p => [p[0], p[1]]);
+            const polyline = new AMap.Polyline({ path });
+            stsMap.setFitView([polyline], {
+                padding: [100, 100, 100, 100],
+                zoom: stsMap.getZoom() + 1
+            });
+        }
+    </script>
+</body>
+
+</html>
