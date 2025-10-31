@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from data import Data
 from pretrain import trainer as PreTrainer
 from loss import TripCausalLoss
-from model import LET
+from model import CTSEF
 from dataloader import TripODPOIWithHour
 from downstream import task, predictor as DownPredictor
 import utils
@@ -22,7 +22,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 def main():
     # Parse command line arguments
     parser = ArgumentParser()
-    parser.add_argument('-c', '--config', help='name of the config file to use', type=str, default="small_chengdu")
+    parser.add_argument('-c', '--config', help='name of the config file to use', type=str, default="")
     parser.add_argument('--cuda', help='index of the cuda device to use', type=int, default=0)
     parser.add_argument('--use-nni', help='whether to use nni', action='store_true')
     args = parser.parse_args()
@@ -76,8 +76,8 @@ def main():
                     model_config["pre_embed"] = data.load_meta(model_config.get("pre_embed"), 0)[0]
                     model_config["pre_embed_update"] = model_config.get("pre_embed_update", True)
 
-                if model_name == 'let':
-                    models.append(LET(**model_config))
+                if model_name == 'CTSEF':
+                    models.append(CTSEF(**model_config))
 
                 else:
                     raise NotImplementedError(f'Unknown model name {model_name}')
@@ -206,7 +206,7 @@ def main():
 
                     if down_task == 'search':
                         search_metas = data.load_meta('trip', int(down_entry['eval_set']))
-                        if model_name == 'let':
+                        if model_name == 'CTSEF':
                             search_metas += data.load_meta('odpois-3', int(down_entry['eval_set']))
                         trip_dataloader = DataLoader(DatasetClass(*search_metas, **dataset_config),
                                                      collate_fn=partial(DatasetClass.collate_fn,
