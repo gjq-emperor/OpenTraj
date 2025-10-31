@@ -1,5 +1,5 @@
 
-# OpenTraj: An Open-Source Platform for Generalized Trajectory Mining Using Large Language Models
+# OpenTraj
 
 The OpenTraj Platform is a comprehensive system for trajectory analysis and prediction, providing three key functionalities:
 - Destination Prediction (DP): Predicts the final destination of moving objects
