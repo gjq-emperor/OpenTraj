@@ -102,7 +102,6 @@ class TimeEmbed(nn.Module):
     def forward(self, time):
         return self.time_mlp(time)
 
-
 class MLP2(nn.Module):
     """
     MLP with two output layers
@@ -121,7 +120,7 @@ class MLP2(nn.Module):
 
 
 class TrajEmbedding(nn.Module):
-    def __init__(self, d_model, add_feats=[],add_embeds=[],dis_feats=[], num_embeds=[], con_feats=[],
+    def __init__(self, d_model, add_feats=[],add_embeds=[],dis_feats=[], num_embeds=[], road_d=[], con_feats=[],
                  pre_embed=None, pre_embed_update=False, second_col=None):
         super().__init__()
 
@@ -158,10 +157,10 @@ class TrajEmbedding(nn.Module):
         num_s2=add_embeds[2]
         num_s3=add_embeds[3]
 
-        dim_u=128
-        dim_s1=64
-        dim_s2=32
-        dim_s3=16
+        dim_u=road_d[0]
+        dim_s1=road_d[1]
+        dim_s2=road_d[2]
+        dim_s3=road_d[3]
         self.embedding_u = nn.Embedding(num_u, dim_u)
         self.embedding_s1 = nn.Embedding(num_s1, dim_s1)
         self.embedding_s2 = nn.Embedding(num_s2, dim_s2)
@@ -212,7 +211,7 @@ class TrajEmbedding(nn.Module):
 
 
 class TrajConvEmbedding(nn.Module):
-    def __init__(self, d_model, add_feats=[],add_embeds=[],dis_feats=[], num_embeds=[], con_feats=[], kernel_size=3,
+    def __init__(self, d_model, add_feats=[],add_embeds=[],dis_feats=[], num_embeds=[], road_d=[], con_feats=[], kernel_size=3,
                  pre_embed=None, pre_embed_update=False, second_col=None):
         super().__init__()
 
@@ -248,10 +247,10 @@ class TrajConvEmbedding(nn.Module):
         num_s2=add_embeds[2]
         num_s3=add_embeds[3]
 
-        dim_u=128
-        dim_s1=64
-        dim_s2=32
-        dim_s3=16
+        dim_u=road_d[0]
+        dim_s1=road_d[1]
+        dim_s2=road_d[2]
+        dim_s3=road_d[3]
         self.embedding_u = nn.Embedding(num_u, dim_u)
         self.embedding_s1 = nn.Embedding(num_s1, dim_s1)
         self.embedding_s2 = nn.Embedding(num_s2, dim_s2)
@@ -297,84 +296,193 @@ class TrajConvEmbedding(nn.Module):
             h += self.time_embed(x[..., int(self.second_col)])
             
         return h
-    
-
-class MSDN(nn.Module):
-    def __init__(self, meaningful_anchors, virtual_anchors):
-        super(MSDN, self).__init__()
-        self.dim_v = 768
+ 
+class MutualSemanticDistillationProjector(nn.Module):
+    """
+    Mutual Semantic Distillation
+    """
+    def __init__(self, emb_size, d_model, meaningful_anchors, virtual_anchors, n_heads,
+                 dropout=0.1, save_attn_map=False, config=None):
+        super().__init__()
+        
+        self.emb_size = emb_size
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
         self.meaningful_anchors = meaningful_anchors
         self.virtual_anchors = virtual_anchors
         self.num_anchors = meaningful_anchors.size(0) + virtual_anchors.size(0)
-        self.W_q = nn.Linear(self.dim_v, self.dim_v)
-        self.W2 = nn.Linear(self.dim_v, self.dim_v)
-        self.W4 = nn.Linear(self.dim_v, self.dim_v)
-
-        self.semantic_transform = nn.MultiheadAttention(self.dim_v, num_heads=4, batch_first=True)
-        self.gate_mlp = nn.Sequential(
-            nn.Linear(2*self.dim_v, 4*self.dim_v),
-            nn.GELU(),
-            nn.Linear(4*self.dim_v, 2*self.dim_v),
-            nn.Tanh()
+        
+        self.normalize_V = False  
+        self.normalize_F = True   
+        
+        self.W1 = nn.Parameter(torch.randn(emb_size, emb_size))  
+        self.W2 = nn.Parameter(torch.randn(emb_size, emb_size))  
+        self.W3 = nn.Parameter(torch.randn(emb_size, emb_size))  
+        
+        self.W1_1 = nn.Parameter(torch.randn(emb_size, emb_size))  
+        self.W2_1 = nn.Parameter(torch.randn(emb_size, emb_size))  
+        self.W3_1 = nn.Parameter(torch.randn(emb_size, emb_size))  
+        #self.W_att = nn.Parameter(torch.randn(emb_size, emb_size))
+        
+        self.fusion_gate = nn.Sequential(
+            nn.Linear(emb_size * 2, emb_size),
+            nn.Sigmoid()
         )
-        self.norm1 = nn.LayerNorm(self.dim_v)
-        self.norm2 = nn.LayerNorm(self.dim_v)
-        self.res_gate = nn.Parameter(torch.tensor(0.5))
         
         
-    def forward(self, x):
-        # x: Input trajectory (B, L, d)
-        B, L, d = x.shape
-        device = x.device
-        anchors = torch.concat([self.meaningful_anchors, self.virtual_anchors], dim=0)  # (K, d)
+        self.layer_norm = nn.LayerNorm(emb_size)
+        self.dropout = nn.Dropout(dropout)
+        
+        self.save_attn_map = save_attn_map
+        self.batch_count = 0
+    def get_anchors(self):
+        anchors = torch.cat([self.meaningful_anchors, self.virtual_anchors], dim=0)
+        if self.normalize_V:
+            anchors = F.normalize(anchors, dim=1)
+        return anchors
+
+    def normalize_features(self, x):
+        if self.normalize_F:
+            return F.normalize(x, dim=1)
+        return x
+
+    def traj_to_semantics_attention(self, x):
+        """
+        Trajectory → Semantics Attention Subnet
+        input: x (B, L, E) - Trajectory
+        output: phi (B, K) , beta (B, K, L) , M (B, K, E)
+        """
+        B, L, E = x.shape
+        anchors = self.get_anchors()  # (K, E)
         K = anchors.size(0)
-        #################### Trajectory → Semantic attention subnetwork ####################
-        Q1 = self.W_q(x)
-        att_scores1 = torch.einsum('bld,kd->blk', Q1, anchors) / (d**0.5)
-        beta = F.softmax(att_scores1, dim=-1)
-        M = torch.einsum('blk,bld->bkd', beta, x)
-        M = self.norm1(M) 
-        phi_k = torch.einsum('bkd,kd->bk', self.W2(M), anchors)
+        x_norm = self.normalize_features(x)
+        
+        S = torch.einsum('ke,ef,ble->bkl', anchors, self.W1, x_norm)  # (B, K, L)
+        
+        A = torch.einsum('ke,ef,ble->bkl', anchors, self.W2, x_norm)
+        A = F.softmax(A, dim=-1) 
+        
+        M = torch.einsum('bkl,ble->bke', A, x_norm)  # (B, K, E)
+        
+        phi = torch.einsum('ke,ef,bke->bk', anchors, self.W3, M)
+        phi = torch.sigmoid(phi) 
+        
+        if self.save_attn_map:
+            np.save(f'epoch0/traj_to_sem_attn_{self.batch_count}.npy', 
+                   A.detach().cpu().numpy())
+        #print(phi)
+        return phi, A, M
 
-        #################### Semantic → Trajectory attention subnetwork ####################
+    def semantics_to_traj_attention(self, x):
+        """
+        Semantics → Trajectory Attention Subnet
+        input: x (B, L, E) 
+        output: omega (B, K) , T (B, L, K), S (B, L, E) 
+        """
+        B, L, E = x.shape
+        anchors = self.get_anchors()  # (K, E)
+        K = anchors.size(0)
+        
+        x_norm = self.normalize_features(x)
+        
+        S = torch.einsum('ble,ef,kf->blk', x_norm, self.W1_1, anchors)  # (B, L, K)
+        
+        T = torch.einsum('ble,ef,kf->blk', x_norm, self.W2_1, anchors)
+        T = F.softmax(T, dim=-1) 
+        
+        v_a = torch.einsum('blk,ke->ble', T, anchors)  # (B, L, E)
+        
+        omega = torch.einsum('ble,ef,ble->bl', x_norm, self.W3_1, v_a)  # (B, L)
 
-        Q2 = self.W_q(x) 
-        T = F.softmax(torch.einsum('bld,kd->blk', Q2, anchors), dim=1)
-        print("T的形状:",T.shape)
-        S = torch.einsum('blk,kd->bld', T, anchors)
-        omega_i = torch.einsum('bld,bld->bl', x, self.W4(S))
         
-        #################### pattern-aware fusion ####################
+        #omega_k = torch.matmul(omega, self.mapping_matrix)  # (B, L) × (L, K) = (B, K) 
+        omega_k = torch.einsum('bl,blk->bk', omega, T)
+        omega_k = torch.sigmoid(omega_k)
+        
+        if self.save_attn_map:
+            np.save(f'epoch0/sem_to_traj_attn_{self.batch_count}.npy', 
+                   T.detach().cpu().numpy())
+        #print(omega_k)
+        return omega_k, T, v_a
 
-        semantic_base = torch.einsum('bk,kd->bkd', phi_k, anchors)
-        semantic_feat, _ = self.semantic_transform(x, anchors.expand(B,-1,-1), semantic_base)
+
+    def semantic_fusion(self, x, phi, omega_k, anchors, A, T):
+        """Pattern-Aware Fusion"""
+        B, L, E = x.shape
+        K = anchors.size(0)
         
-        trajectory_feat = torch.einsum('bl,bld->bld', omega_i, x)
+        #combined_confidence = torch.sigmoid((phi + omega_k) / 2)
+        combined_confidence = (phi + omega_k) / 2
         
-        # 双路门控融合
-        combined = torch.cat([semantic_feat, trajectory_feat], dim=-1)
-        gate_out = self.gate_mlp(combined)
-        gate_sem, gate_traj = gate_out.chunk(2, dim=-1)
+        weighted_anchors = torch.einsum('bk,ke->bke', combined_confidence, anchors)  # (B, K, E)
         
-        fused = gate_sem * semantic_feat + gate_traj * trajectory_feat
-        x_out = self.res_gate * x + (1 - self.res_gate) * fused
-        return self.norm2(x_out)
+        semantic_context = torch.einsum('blk, bke -> ble', T, weighted_anchors) # (B, L, E)
+
+        gate = self.fusion_gate(torch.cat([x, semantic_context], dim=-1))
+        fused_output = gate * x + (1 - gate) * semantic_context
+        
+        return fused_output
+
+
+    def forward(self, x):
+        B, L, E = x.shape
+        anchors = self.get_anchors()
+        
+        phi, A_traj_to_sem, M = self.traj_to_semantics_attention(x)
+        
+        omega_k, T_sem_to_traj, v_a = self.semantics_to_traj_attention(x)
+        
+        fused = self.semantic_fusion(x, phi, omega_k, anchors,A_traj_to_sem, T_sem_to_traj)
+        
+        output = self.layer_norm(x + self.dropout(fused))
+        
+        self.batch_count += 1
+        
+        #return output
+        return {
+            'output': output,
+            'phi': phi,  
+            'omega_k': omega_k,  
+            'A_traj_to_sem': A_traj_to_sem,  
+            'T_sem_to_traj': T_sem_to_traj  
+        }
+
 
 class PatternSemanticProjector(nn.Module):
-    """ Project movement patterns onto a semantic-rich textual space. """
-    
     def __init__(self, emb_size, d_model, meaningful_anchors, virtual_anchors, n_heads,
-                 dropout=0.1, save_attn_map=False) -> None:
+                 dropout=0.1, save_attn_map=False, config=None) -> None:
         super().__init__()
-        
-        self.mhca = MSDN(meaningful_anchors, virtual_anchors)
-        # feedforward layer
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.ReLU(),
-            nn.Linear(d_model, d_model)
+
+        self.mhca = MutualSemanticDistillationProjector(
+            emb_size, d_model, meaningful_anchors, virtual_anchors, n_heads,
+            dropout=dropout, save_attn_map=save_attn_map, config=config
         )
-        # self.ln = nn.LayerNorm(d_model)
+        
+      
+        self.ffn = nn.Sequential(
+            nn.Linear(emb_size, emb_size),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(emb_size, emb_size)
+        )
+        self.layer_norm = nn.LayerNorm(emb_size)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        return x + self.ffn(self.mhca(x))
+        
+        mhca_output = self.mhca(x)
+        
+        
+        ff_output = self.ffn(mhca_output['output'])
+        output = self.layer_norm(x + self.dropout(ff_output))
+         
+        
+        #return output
+        return {
+            'output': output,
+            'phi': mhca_output['phi'],
+            'omega_k': mhca_output['omega_k'],
+            'A_traj_to_sem': mhca_output['A_traj_to_sem'],
+            'T_sem_to_traj': mhca_output['T_sem_to_traj']
+        }
