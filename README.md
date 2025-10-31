@@ -13,7 +13,7 @@ project/
 ├── data.py               # Data preprocessing and loading
 ├── main.py               # Model training entry point
 ├── model/                # Model implementations
-│   ├── CTSEF.py            # CTSEF trajectory embedding model
+│   ├── CTSEF.py          # CTSEF trajectory embedding model
 │   └── layers.py         # Neural network components
 ├── downstream/           # Task-specific modules
 │   ├── task.py           # Downstream task trainers
@@ -53,7 +53,7 @@ To use custom datasets, preprocess your data as follows:
 
 Preprocess with:
 ```bash
-python data.py -n small_chengdu -t trip,odpois-3,destination,tte,hopqrytgtpois-1000-3,hopqrytgt-1000,hopnegindex-1000-5000 -i 0,1,2
+python data.py -n small_chengdu -t trip,odpois-3,destination,tte,hopqrytgtpois-5-3,hopqrytgt-5,hopnegindex-5-5 -i 0,1,2
 ```
 
 ### Model Training
