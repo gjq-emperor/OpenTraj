@@ -63,7 +63,35 @@ class POILoss(Loss):
     def forward(self, logits, labels):
         # Calculate recovery loss.
         return self.loss_fct(logits.view(-1, logits.size(-1)), labels.long().view(-1))
+        
+class DistillationLoss(nn.Module):
+    def __init__(self, lambda_jsd=1.0, lambda_mse=1.0, temperature=1.0):
+        super().__init__()
+        self.lambda_jsd = lambda_jsd
+        self.lambda_mse = lambda_mse
+        self.temperature = temperature
 
+    def forward(self, phi, omega_k):
+        phi_soft = F.softmax(phi / self.temperature, dim=-1)
+        omega_k_soft = F.softmax(omega_k / self.temperature, dim=-1)
+        
+        m = 0.5 * (phi_soft + omega_k_soft)
+        kl1 = F.kl_div(
+            F.log_softmax(phi / self.temperature, dim=-1), 
+            m, 
+            reduction='batchmean'
+        )
+        kl2 = F.kl_div(
+            F.log_softmax(omega_k / self.temperature, dim=-1), 
+            m, 
+            reduction='batchmean'
+        )
+        jsd = 0.5 * (kl1 + kl2)
+
+        mse = F.mse_loss(phi, omega_k)
+
+        loss = self.lambda_jsd * jsd + self.lambda_mse * mse
+        return loss
 
 class NoneLoss(Loss):
     def __init__(self):
@@ -75,7 +103,7 @@ class NoneLoss(Loss):
 
 class TripCausalLoss(Loss):
     def __init__(self, latent_size, out_dis, out_con_feas, 
-                 dis_weight=0.5, con_weight=0.5, shift_labels=False, add_poi=True):
+                 dis_weight=0.5, con_weight=0.5, shift_labels=False, add_poi=True,lambda_distill=1.0, lambda_jsd=1.0, lambda_mse=1.0,temperature=1.0):
 
         self.add_poi = add_poi
 
@@ -89,18 +117,25 @@ class TripCausalLoss(Loss):
         self.trip_loss = trip_loss
         self.poi_loss = poi_loss
         self.shift_labels = shift_labels
+        self.distill_loss = DistillationLoss(
+            lambda_jsd=lambda_jsd, 
+            lambda_mse=lambda_mse, 
+            temperature=temperature
+        )
+        #self.distill_loss = DistillationLoss(lambda_jsd, lambda_mse)
+        self.lambda_distill = lambda_distill
 
     def forward(self, models, trip, valid_len, o_pois, d_pois, start_weekday, start_hour, **kwargs):
         encoder, = models
         # Feed encode metas to the encoder.
-        trip_latent, o_logits, d_logits, o_labels, d_labels = \
+        trip_latent, o_logits, d_logits, o_labels, d_labels ,phi, omega_k= \
             encoder.forward_flip(trip, valid_len, o_pois, d_pois, start_weekday, start_hour, shift_labels=self.shift_labels)
-        
         if self.shift_labels:
             trip = trip[:, 1:]
             valid_len = valid_len - 1
         trip_loss = self.trip_loss(trip_latent, trip, valid_len)
         poi_loss = self.poi_loss(o_logits, o_labels) + self.poi_loss(d_logits, d_labels)
-
-        return trip_loss + poi_loss
+        distill_loss = self.distill_loss(phi, omega_k)
+        total_loss = trip_loss + poi_loss + self.lambda_distill * distill_loss
+        return total_loss
     
