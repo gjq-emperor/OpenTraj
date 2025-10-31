@@ -6,7 +6,7 @@
         },
         "models": [
             {
-                "name": "let",
+                "name": "CTSEF",
                 "config": {
                     "d_model": 768,
                     "output_size": 128,
@@ -33,6 +33,12 @@
                         7,
                         24
                     ],
+                    "road_d":[
+                        128,
+                        64,
+                        32,
+                        16
+                    ],
                     "con_feats": [
                         0,
                         3,
@@ -50,7 +56,7 @@
                     "add_poi": true,
                     "add_conv_embedder": true,
                     "kernel_size": 5,
-                    "num_virtual_anchors": 15
+                    "num_virtual_anchors": 64
                 }
             }
         ],
@@ -111,12 +117,12 @@
                     0
                 ],
                 "eval_set": 2,
-                "neg_indices": "hopnegindex-1000-5000",
+                "neg_indices": "hopnegindex-5-5",
                 "dataloader": {
                     "name": "trip_with_odpoi_hour",
                     "meta_types": [
-                        "hopqrytgt-1000",
-                        "hopqrytgtpois-1000-3"
+                        "hopqrytgt-5",
+                        "hopqrytgtpois-5-3"
                     ],
                     "dataset_config": {
                         "prop": 1
@@ -146,7 +152,7 @@
         },
         "models": [
             {
-                "name": "let",
+                "name": "CTSEF",
                 "config": {
                     "d_model": 768,
                     "output_size": 128,
@@ -173,6 +179,12 @@
                         7,
                         24
                     ],
+                    "road_d":[
+                        128,
+                        64,
+                        32,
+                        16
+                    ],
                     "con_feats": [
                         0,
                         3,
@@ -190,7 +202,7 @@
                     "add_poi": true,
                     "add_conv_embedder": true,
                     "kernel_size": 5,
-                    "num_virtual_anchors": 15
+                    "num_virtual_anchors": 64
                 }
             }
         ],
@@ -284,7 +296,7 @@
         },
         "models": [
             {
-                "name": "let",
+                "name": "CTSEF",
                 "config": {
                     "d_model": 768,
                     "output_size": 128,
@@ -311,6 +323,12 @@
                         7,
                         24
                     ],
+                    "road_d":[
+                        128,
+                        64,
+                        32,
+                        16
+                    ],
                     "con_feats": [
                         3,
                         4
@@ -324,7 +342,7 @@
                     "add_poi": true,
                     "add_conv_embedder": true,
                     "kernel_size": 5,
-                    "num_virtual_anchors": 15
+                    "num_virtual_anchors": 64
                 }
             }
         ],
