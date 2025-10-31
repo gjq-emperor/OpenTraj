@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import nn
 from flask import Flask, request, render_template, jsonify
-from model import LET
+from model import CTSEF
 from downstream import task, predictor as DownPredictor
 import pandas as pd
 import data
@@ -51,7 +51,7 @@ class TaskConfig:
         self.lora_alpha = 16
         self.lora_dim = 8
         self.kernel_size = 5
-        self.num_virtual_anchors = 15
+        self.num_virtual_anchors = 64
 
         # Task-specific configuration
         if task_type == 'dp':
@@ -59,31 +59,35 @@ class TaskConfig:
             self.add_embeds = [4315, 8, 5, 2]
             self.dis_feats = [1, 5, 7]
             self.num_embeds = [4315, 7, 24]
+            self.road_d = [128, 64, 32, 16]
             self.con_feats = [0, 3, 4, 8, 9, 10]
         elif task_type == 'tte':
             self.add_feats = [1, 11, 12, 13]
             self.add_embeds = [4315, 8, 5, 2]
             self.dis_feats = [1, 5, 7]
             self.num_embeds = [4315, 7, 24]
+            self.road_d = [128, 64, 32, 16]
             self.con_feats = [3, 4] 
         elif task_type == 'sts':
             self.add_feats = [1, 11, 12, 13]
             self.add_embeds = [4315, 8, 5, 2]
             self.dis_feats = [1, 5, 7]
             self.num_embeds = [4315, 7, 24]
+            self.road_d = [128, 64, 32, 16]
             self.con_feats = [0, 3, 4, 8, 9, 10]
 
 def load_models():
     """Load all task models"""
     try:
         dp_config = TaskConfig('dp')
-        models['dp']['model'] = LET(
+        models['dp']['model'] = CTSEF(
             d_model=dp_config.d_model,
             output_size=dp_config.output_size,
             add_feats=dp_config.add_feats,
             add_embeds=dp_config.add_embeds,
             dis_feats=dp_config.dis_feats,
             num_embeds=dp_config.num_embeds,
+            road_d=dp_config.road_d,
             con_feats=dp_config.con_feats,
             model_class=dp_config.model_class,
             lora=dp_config.lora,
@@ -93,7 +97,7 @@ def load_models():
             num_virtual_anchors=dp_config.num_virtual_anchors
         )
         models['dp']['model'].load_state_dict(
-            torch.load('model_save/destination/LET-d768-o128-1,5,7,0,3,4,8,9,10-gpt2-m30-a15-psp-lora8,16-conv-k5-poi.model', 
+            torch.load('model_save/destination/CTSEF-d768-o128-1,5,7,0,3,4,8,9,10-gpt2-m38-a64-psp-lora8,16-conv-k5-poi.model', 
                       map_location=device)
         )
         models['dp']['predictor'] = DownPredictor.FCPredictor(input_size=128, output_size=4315, hidden_size=256)
@@ -101,13 +105,14 @@ def load_models():
 
 
         tte_config = TaskConfig('tte')
-        models['tte']['model'] = LET(
+        models['tte']['model'] = CTSEF(
             d_model=tte_config.d_model,
             output_size=tte_config.output_size,
             add_feats=tte_config.add_feats,
             add_embeds=tte_config.add_embeds,
             dis_feats=tte_config.dis_feats,
             num_embeds=tte_config.num_embeds,
+            road_d=tte_config.road_d,
             con_feats=tte_config.con_feats,
             model_class=tte_config.model_class,
             lora=tte_config.lora,
@@ -117,7 +122,7 @@ def load_models():
             num_virtual_anchors=tte_config.num_virtual_anchors
         )
         models['tte']['model'].load_state_dict(
-            torch.load('model_save/tte/LET-d768-o128-1,5,7,3,4-gpt2-m30-a15-psp-lora8,16-conv-k5-poi.model', 
+            torch.load('model_save/tte/CTSEF-d768-o128-1,5,7,3,4-gpt2-m38-a64-psp-lora8,16-conv-k5-poi.model', 
                       map_location=device)
         )
         models['tte']['predictor'] = DownPredictor.FCPredictor(input_size=128, output_size=1, hidden_size=256)
@@ -125,13 +130,14 @@ def load_models():
 
 
         sts_config = TaskConfig('sts')
-        models['sts']['model'] = LET(
+        models['sts']['model'] = CTSEF(
             d_model=sts_config.d_model,
             output_size=sts_config.output_size,
             add_feats=sts_config.add_feats,
             add_embeds=sts_config.add_embeds,
             dis_feats=sts_config.dis_feats,
             num_embeds=sts_config.num_embeds,
+            road_d=sts_config.road_d,
             con_feats=sts_config.con_feats,
             model_class=sts_config.model_class,
             lora=sts_config.lora,
@@ -141,7 +147,7 @@ def load_models():
             num_virtual_anchors=sts_config.num_virtual_anchors
         )
         models['sts']['model'].load_state_dict(
-            torch.load('model_save/generative_b16-lr0.0001/LOSS_trip_causual-LOSS_trip-dis-0.5-1-con-0.5-3,4,8,9,10-LOSS_poi/LET-d768-o128-1,5,7,0,3,4,8,9,10-gpt2-m30-a15-psp-lora8,16-conv-k5-poi.model',
+            torch.load('model_save/generative_b16-lr0.0001/LOSS_trip_causual-LOSS_trip-dis-0.5-1-con-0.5-3,4,8,9,10-LOSS_poi/CTSEF-d768-o128-1,5,7,0,3,4,8,9,10-gpt2-m38-a64-psp-lora8,16-conv-k5-poi.model',
                       map_location=device)
         )
         models['sts']['predictor'] = DownPredictor.NonePredictor()
