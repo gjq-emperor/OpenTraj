@@ -13,7 +13,7 @@ project/
 ├── data.py               # Data preprocessing and loading
 ├── main.py               # Model training entry point
 ├── model/                # Model implementations
-│   ├── let.py            # LET trajectory embedding model
+│   ├── CTSEF.py            # CTSEF trajectory embedding model
 │   └── layers.py         # Neural network components
 ├── downstream/           # Task-specific modules
 │   ├── task.py           # Downstream task trainers
