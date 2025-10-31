@@ -88,15 +88,15 @@ def get_tokenizer(model_path, model_class):
     return AutoTokenizer.from_pretrained(model_path)
 
 
-class LET(Encoder):
+class CTSEF(Encoder):
     def __init__(self, d_model, output_size, add_feats=[],add_embeds=[],
-                 dis_feats=[], num_embeds=[], con_feats=[], second_col=None,
+                 dis_feats=[], num_embeds=[], road_d=[], con_feats=[], second_col=None,
                  model_class='gpt2', pre_embed=None, pre_embed_update=False,
                  two_stage=False, lora=True, lora_alpha=32, lora_dim=8, kernel_size=3,
                  wpe_ft=False, semantic_projecting=True, add_poi=True, add_conv_embedder=True,
-                 num_meaningful_anchors=30, num_virtual_anchors=15, save_attn_map=False):
+                 num_meaningful_anchors=38, num_virtual_anchors=64, save_attn_map=False):
         """
-        Initialize the LET.
+        Initialize the CTSEF.
 
         Args:
             d_model (int): The dimension of the model.
@@ -123,7 +123,7 @@ class LET(Encoder):
             save_attn_map (bool): Whether to save attention maps.
         """
 
-        super().__init__(f'LET-d{int(d_model)}-o{int(output_size)}-' + ','.join(map(str, dis_feats + con_feats)) +
+        super().__init__(f'CTSEF-d{int(d_model)}-o{int(output_size)}-' + ','.join(map(str, dis_feats + con_feats)) +
                          f'-{model_class}-m{int(num_meaningful_anchors)}-a{int(num_virtual_anchors)}' +
                          (f'-s{second_col}' if second_col is not None else '') +
                          (f'-psp' if semantic_projecting else '') + (f'-twostage' if two_stage else '') +
@@ -136,13 +136,13 @@ class LET(Encoder):
         self.con_feats = con_feats
 
         self.add_feats=add_feats
-
-
         self.second_col = second_col
         self.model_class = model_class
         self.two_stage = two_stage
         self.add_poi = add_poi
 
+        #self.phi = None
+        #self.omega_k = None
         model_path = get_model_path(model_class)
         self.model_path = model_path
         self.tokenizer = get_tokenizer(model_path, model_class)
@@ -175,9 +175,9 @@ class LET(Encoder):
             self.pattern_semantic_projector = nn.Identity()
 
         if add_conv_embedder:
-            self.embedder = TrajConvEmbedding(self.emb_size, add_feats,add_embeds,dis_feats, num_embeds, con_feats, kernel_size, pre_embed, pre_embed_update, second_col)
+            self.embedder = TrajConvEmbedding(self.emb_size, add_feats,add_embeds,dis_feats, num_embeds, road_d, con_feats, kernel_size, pre_embed, pre_embed_update, second_col)
         else:
-            self.embedder = TrajEmbedding(self.emb_size, add_feats,add_embeds,dis_feats, num_embeds, con_feats, pre_embed, pre_embed_update, second_col)
+            self.embedder = TrajEmbedding(self.emb_size, add_feats,add_embeds,dis_feats, num_embeds, road_d, con_feats, pre_embed, pre_embed_update, second_col)
 
         if self.two_stage:
             self.poi_projector = nn.Linear(self.emb_size, self.emb_size)
@@ -198,7 +198,9 @@ class LET(Encoder):
                 "避", "巡", "绕", "滑", "曲",
                 "稳", "顺", "乱", "粗", "敏",
                 "缓", "静", "动", "超", "滑",
-                "速", "急", "闲", "慎", "莽"
+                "速", "急", "闲", "慎", "莽",
+                "宵", "昧", "晨", "晖", "昼",
+                "晚", "昏", "夜"
             ]
         elif lang == 'en':
             meaningful_words = [
@@ -207,7 +209,9 @@ class LET(Encoder):
                 "swerve", "cruise", "detour", "slide", "zigzag",
                 "steady", "smooth", "erratic", "rough", "agile",
                 "sluggish", "stationary", "dynamic", "overtake", "glide",
-                "rapid", "rushed", "leisurely", "cautious", "reckless"
+                "rapid", "rushed", "leisurely", "cautious", "reckless",
+                "night", "dark", "morning", "sunshine","day", "evening",
+                "dusk", "night"
             ]
 
         meaningful_words = meaningful_words[:num_meaningful_anchors]
@@ -246,7 +250,9 @@ class LET(Encoder):
         head = self._prefix_template(start_weekday, start_hour, lang=lang)
         suffix_prompt = torch.cat([self.suffix_prompt.squeeze(), self.cls_token.unsqueeze(0)], dim=0)
 
-        traj_embeddings = self.traj_emb(trip, valid_len)
+        traj_emb_dict = self.traj_emb(trip, valid_len)
+        traj_embeddings = traj_emb_dict['output']
+        
         B, L, E_in = traj_embeddings.shape
         start_point, end_point, traj, suffix_prompt = \
             [repeat(x.squeeze(), 'L E -> B L E', B=B)
@@ -323,6 +329,14 @@ class LET(Encoder):
     def forward_flip(self, *args, **kwargs):
         h_trip, o_logits, d_logits, o_labels, d_labels = None, None, None, None, None
 
+        phi, omega_k = None, None
+        trip = args[0]
+        valid_len = args[1]
+        traj_emb_dict = self.traj_emb(trip, valid_len)
+        phi = traj_emb_dict['phi']
+        omega_k = traj_emb_dict['omega_k']
+
+
         h_trip, trip_placeholder = self.forward_latent(*args, recover_type='trip', **kwargs)
         h_trip = h_trip[trip_placeholder]
 
@@ -331,7 +345,7 @@ class LET(Encoder):
             o_logits = logits[o_placeholder]
             d_logits = logits[d_placeholder]
 
-        return h_trip, o_logits, d_logits, o_labels, d_labels
+        return h_trip, o_logits, d_logits, o_labels, d_labels, phi, omega_k
 
     def prompt_template(self, o_pois, d_pois, trip, valid_len, start_weekday=1, start_hour=8, suffix_prompt=None, token=None, lang='zh', **kwargs):
         B, L, _ = trip.shape
@@ -344,7 +358,7 @@ class LET(Encoder):
             suffix_prompt = torch.cat([self.suffix_prompt.squeeze(), self.cls_token.unsqueeze(0)], dim=0)
 
 
-        traj_embeddings = self.traj_emb(trip, valid_len)
+        traj_embeddings = self.traj_emb(trip, valid_len)['output']
         traj, suffix_prompt = [repeat(x.squeeze(), 'L E -> B L E', B=B) for x in (self.traj_template, suffix_prompt)]
         traj_part, traj_valid_len = concatenate_sequences(traj, traj_embeddings, traj.size(1), valid_len)
 
@@ -412,9 +426,10 @@ class LET(Encoder):
 
         # embed
         x = self.embedder(x)
-        x = self.pattern_semantic_projector(x)
+        
+        x_dict = self.pattern_semantic_projector(x)
 
-        return x
+        return x_dict
 
     def forward(self, x, valid_len, o_pois, d_pois, start_weekday=1, start_hour=8, suffix_prompt=None, token=None, lang='zh', **kwargs):
         if token is None:
